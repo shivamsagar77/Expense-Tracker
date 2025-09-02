@@ -15,7 +15,7 @@ exports.login = async (req, res) => {
     if (!isMatch) {
       return res.status(401).json({ message: 'Invalid email or password.' });
     }
-    return res.status(200).json({ message: 'Login successful', name: user.name });
+    return res.status(200).json({ message: 'Login successful', name: user.name, user_id: user.id });
   } catch (err) {
     return res.status(500).json({ message: 'Server error', error: err.message });
   }

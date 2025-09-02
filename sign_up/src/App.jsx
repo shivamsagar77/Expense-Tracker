@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   TextField,
   Button,
@@ -12,6 +12,14 @@ import {
   Modal,
   Fade,
   Backdrop,
+  MenuItem,
+  Select,
+  InputLabel,
+  FormControl,
+  List,
+  ListItem,
+  ListItemText,
+  Divider,
 } from "@mui/material";
 import axios from "axios";
 
@@ -47,6 +55,58 @@ export default function App() {
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
   const [welcome, setWelcome] = useState("");
+  const [expenses, setExpenses] = useState([]);
+  const [expenseForm, setExpenseForm] = useState({ amount: '', description: '', category: '' });
+  const [expenseError, setExpenseError] = useState('');
+  const [userId, setUserId] = useState(() => localStorage.getItem('user_id') || '');
+  const [categories, setCategories] = useState([]);
+
+  // Fetch categories from backend
+  useEffect(() => {
+    if (welcome) {
+      axios.get("http://localhost:5000/categories")
+        .then(res => setCategories(res.data))
+        .catch(() => setCategories([]));
+    }
+  }, [welcome]);
+
+  // Fetch expenses for user from backend
+  useEffect(() => {
+    if (welcome && userId) {
+      axios.get(`http://localhost:5000/expenses/${userId}`)
+        .then(res => setExpenses(res.data))
+        .catch(() => setExpenses([]));
+    }
+  }, [welcome, userId]);
+
+  // Add expense via backend
+  const handleExpenseSubmit = async (e) => {
+    e.preventDefault();
+    setExpenseError("");
+    if (!expenseForm.amount || !expenseForm.description || !expenseForm.category) {
+      setExpenseError("All fields are required");
+      return;
+    }
+    const selectedCategory = categories.find(cat => cat.name === expenseForm.category);
+    if (!selectedCategory) {
+      setExpenseError("Invalid category");
+      return;
+    }
+    try {
+      const res = await axios.post("http://localhost:5000/expenses", {
+        user_id: userId,
+        amount: expenseForm.amount,
+        description: expenseForm.description,
+        category_id: selectedCategory.id,
+      }, {
+        headers: { "Content-Type": "application/json" },
+      });
+      setExpenses([res.data, ...expenses]);
+      setExpenseForm({ amount: '', description: '', category: '' });
+    } catch (err) {
+      setExpenseError(err.response?.data?.message || err.message);
+    }
+  };
 
   // input handle
   const handleChange = (e) => {
@@ -108,6 +168,8 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
       });
       setWelcome(res.data.name);
+      setUserId(res.data.user_id);
+      localStorage.setItem('user_id', res.data.user_id);
       setLoginOpen(false);
       setLoginData({ email: "", password: "" });
     } catch (err) {
@@ -115,6 +177,10 @@ export default function App() {
     } finally {
       setLoginLoading(false);
     }
+  };
+
+  const handleExpenseChange = (e) => {
+    setExpenseForm({ ...expenseForm, [e.target.name]: e.target.value });
   };
 
   return (
@@ -131,11 +197,93 @@ export default function App() {
         }}
       >
         {welcome ? (
-          <Card sx={{ width: 400, p: 3, borderRadius: "16px", background: "rgba(30,30,30,0.9)", boxShadow: "0 8px 32px rgba(0,0,0,0.5)", backdropFilter: "blur(10px)" }}>
+          <Card sx={{ width: 900, p: 3, borderRadius: "16px", background: "rgba(30,30,30,0.9)", boxShadow: "0 8px 32px rgba(0,0,0,0.5)", backdropFilter: "blur(10px)" }}>
             <CardContent>
               <Typography variant="h5" align="center" sx={{ mb: 2, fontWeight: "bold", color: "#4cafef" }}>
                 Welcome, {welcome}!
               </Typography>
+              <Divider sx={{ mb: 2 }} />
+              <Box sx={{ display: 'flex', gap: 4, flexDirection: { xs: 'column', md: 'row' } }}>
+                {/* Expense Form (Left) */}
+                <Box sx={{ flex: 1, minWidth: 300 }}>
+                  <Typography variant="h6" sx={{ mb: 1, color: "#4cafef" }}>Add Daily Expense</Typography>
+                  <form onSubmit={handleExpenseSubmit}>
+                    <TextField
+                      label="Amount"
+                      name="amount"
+                      type="number"
+                      fullWidth
+                      margin="normal"
+                      value={expenseForm.amount}
+                      onChange={handleExpenseChange}
+                      required
+                    />
+                    <TextField
+                      label="Description"
+                      name="description"
+                      fullWidth
+                      margin="normal"
+                      value={expenseForm.description}
+                      onChange={handleExpenseChange}
+                      required
+                    />
+                    <FormControl fullWidth margin="normal" required>
+                      <InputLabel>Category</InputLabel>
+                      <Select
+                        name="category"
+                        value={expenseForm.category}
+                        label="Category"
+                        onChange={handleExpenseChange}
+                      >
+                        {categories.map((cat) => (
+                          <MenuItem key={cat.id} value={cat.name}>{cat.name}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    {expenseError && (
+                      <Typography color="error" align="center" sx={{ mt: 1 }}>
+                        {expenseError}
+                      </Typography>
+                    )}
+                    <Button
+                      type="submit"
+                      variant="contained"
+                      fullWidth
+                      sx={{
+                        mt: 2,
+                        borderRadius: "10px",
+                        fontWeight: "bold",
+                        py: 1.2,
+                        background: "linear-gradient(135deg, #4cafef, #1976d2)",
+                      }}
+                    >
+                      Add Expense
+                    </Button>
+                  </form>
+                </Box>
+                {/* Expense List (Right) */}
+                <Box sx={{ flex: 1.2, minWidth: 300 }}>
+                  <Typography variant="h6" sx={{ mb: 1, color: "#4cafef" }}>Your Expenses</Typography>
+                  <List>
+                    {expenses.length === 0 && (
+                      <ListItem>
+                        <ListItemText primary="No expenses yet." />
+                      </ListItem>
+                    )}
+                    {expenses.map((exp) => (
+                      <React.Fragment key={exp.id}>
+                        <ListItem>
+                          <ListItemText
+                            primary={`₹${exp.amount} - ${exp.Category?.name || ''}`}
+                            secondary={exp.description}
+                          />
+                        </ListItem>
+                        <Divider />
+                      </React.Fragment>
+                    ))}
+                  </List>
+                </Box>
+              </Box>
             </CardContent>
           </Card>
         ) : (

@@ -6,6 +6,8 @@
 
   const signup = require('./routes/signup')
   const login = require('./routes/login')
+  const category = require('./routes/category')
+  const expense = require('./routes/expense')
   // Middleware
   app.use(cors());
   app.use(express.json()); // Parse incoming JSON
@@ -21,6 +23,8 @@
   // app.use("/api/student_system",student_system)
 app.use("/signup",signup)
 app.use("/login",login)
+app.use("/categories", category)
+app.use("/expenses", expense)
   // ✅ Set correct PORT (5000, not 500)
   const PORT = 5000;
 
