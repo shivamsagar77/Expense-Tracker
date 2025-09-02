@@ -1,4 +1,5 @@
 const Signup = require('../model/signup'); // Sequelize model
+const bcrypt = require('bcrypt');
 
 const signUpController = {
   signup: async (req, res) => {
@@ -16,12 +17,15 @@ const signUpController = {
         return res.status(409).json({ message: "User already exists with this email" });
       }
 
+      // hash password
+      const hashedPassword = await bcrypt.hash(password, 10);
+
       // create new user
       const newUser = await Signup.create({
         name,
         phone,
         email,
-        password, // In production, hash the password!
+        password: hashedPassword,
         created_at: new Date(),
       });
 
