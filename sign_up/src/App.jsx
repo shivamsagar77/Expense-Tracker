@@ -19,9 +19,12 @@ import {
   List,
   ListItem,
   ListItemText,
+  ListItemSecondaryAction,
+  IconButton,
   Divider,
 } from "@mui/material";
-import axios from "axios";
+import { Delete as DeleteIcon } from "@mui/icons-material";
+import api, { expenseAPI } from "./utils/api";
 
 // Dark Theme
 const darkTheme = createTheme({
@@ -61,10 +64,22 @@ export default function App() {
   const [userId, setUserId] = useState(() => localStorage.getItem('user_id') || '');
   const [categories, setCategories] = useState([]);
 
+  // Check if user is already logged in on app load
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const storedUserId = localStorage.getItem('user_id');
+    const storedUserName = localStorage.getItem('user_name');
+    
+    if (token && storedUserId && storedUserName) {
+      setWelcome(storedUserName);
+      setUserId(storedUserId);
+    }
+  }, []);
+
   // Fetch categories from backend
   useEffect(() => {
     if (welcome) {
-      axios.get("http://localhost:5000/categories")
+      api.get("/categories")
         .then(res => setCategories(res.data))
         .catch(() => setCategories([]));
     }
@@ -73,7 +88,7 @@ export default function App() {
   // Fetch expenses for user from backend
   useEffect(() => {
     if (welcome && userId) {
-      axios.get(`http://localhost:5000/expenses/${userId}`)
+      api.get("/expenses")
         .then(res => setExpenses(res.data))
         .catch(() => setExpenses([]));
     }
@@ -92,19 +107,32 @@ export default function App() {
       setExpenseError("Invalid category");
       return;
     }
-    try {
-      const res = await axios.post("http://localhost:5000/expenses", {
-        user_id: userId,
-        amount: expenseForm.amount,
-        description: expenseForm.description,
-        category_id: selectedCategory.id,
-      }, {
-        headers: { "Content-Type": "application/json" },
-      });
+          try {
+        const res = await api.post("/expenses", {
+          amount: expenseForm.amount,
+          description: expenseForm.description,
+          category_id: selectedCategory.id,
+        });
       setExpenses([res.data, ...expenses]);
       setExpenseForm({ amount: '', description: '', category: '' });
+
+      api.get("/expenses")
+      .then(res => setExpenses(res.data))
+      .catch(() => setExpenses([]));
     } catch (err) {
       setExpenseError(err.response?.data?.message || err.message);
+    }
+  };
+
+  const handleDeleteExpense = async (expenseId) => {
+    if (window.confirm('Are you sure you want to delete this expense?')) {
+      try {
+        await expenseAPI.deleteExpense(expenseId);
+        // Remove the deleted expense from the local state
+        setExpenses(expenses.filter(exp => exp.id !== expenseId));
+      } catch (err) {
+        alert('Error deleting expense: ' + (err.response?.data?.message || err.message));
+      }
     }
   };
 
@@ -143,10 +171,14 @@ export default function App() {
     if (validate()) {
       setLoading(true);
       try {
-        const res = await axios.post("http://localhost:5000/signup", formData, {
-          headers: { "Content-Type": "application/json" },
-        });
+        const res = await api.post("/signup", formData);
         alert("Signup successful: " + res.data.message);
+        // Auto-login after signup
+        setWelcome(res.data.user.name);
+        setUserId(res.data.user.id);
+        localStorage.setItem('user_id', res.data.user.id);
+        localStorage.setItem('token', res.data.token);
+        localStorage.setItem('user_name', res.data.user.name);
       } catch (err) {
         alert("Error: " + (err.response?.data?.message || err.message));
       } finally {
@@ -164,12 +196,12 @@ export default function App() {
     setLoginError("");
     setLoginLoading(true);
     try {
-      const res = await axios.post("http://localhost:5000/login", loginData, {
-        headers: { "Content-Type": "application/json" },
-      });
-      setWelcome(res.data.name);
-      setUserId(res.data.user_id);
-      localStorage.setItem('user_id', res.data.user_id);
+              const res = await api.post("/login", loginData);
+              setWelcome(res.data.name);
+        setUserId(res.data.user_id);
+        localStorage.setItem('user_id', res.data.user_id);
+        localStorage.setItem('token', res.data.token);
+        localStorage.setItem('user_name', res.data.name);
       setLoginOpen(false);
       setLoginData({ email: "", password: "" });
     } catch (err) {
@@ -197,95 +229,295 @@ export default function App() {
         }}
       >
         {welcome ? (
-          <Card sx={{ width: 900, p: 3, borderRadius: "16px", background: "rgba(30,30,30,0.9)", boxShadow: "0 8px 32px rgba(0,0,0,0.5)", backdropFilter: "blur(10px)" }}>
-            <CardContent>
-              <Typography variant="h5" align="center" sx={{ mb: 2, fontWeight: "bold", color: "#4cafef" }}>
-                Welcome, {welcome}!
-              </Typography>
-              <Divider sx={{ mb: 2 }} />
-              <Box sx={{ display: 'flex', gap: 4, flexDirection: { xs: 'column', md: 'row' } }}>
-                {/* Expense Form (Left) */}
-                <Box sx={{ flex: 1, minWidth: 300 }}>
-                  <Typography variant="h6" sx={{ mb: 1, color: "#4cafef" }}>Add Daily Expense</Typography>
-                  <form onSubmit={handleExpenseSubmit}>
-                    <TextField
-                      label="Amount"
-                      name="amount"
-                      type="number"
-                      fullWidth
-                      margin="normal"
-                      value={expenseForm.amount}
-                      onChange={handleExpenseChange}
-                      required
-                    />
-                    <TextField
-                      label="Description"
-                      name="description"
-                      fullWidth
-                      margin="normal"
-                      value={expenseForm.description}
-                      onChange={handleExpenseChange}
-                      required
-                    />
-                    <FormControl fullWidth margin="normal" required>
-                      <InputLabel>Category</InputLabel>
-                      <Select
-                        name="category"
-                        value={expenseForm.category}
-                        label="Category"
-                        onChange={handleExpenseChange}
-                      >
-                        {categories.map((cat) => (
-                          <MenuItem key={cat.id} value={cat.name}>{cat.name}</MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                    {expenseError && (
-                      <Typography color="error" align="center" sx={{ mt: 1 }}>
-                        {expenseError}
-                      </Typography>
-                    )}
+          <Box sx={{ width: '100%', maxWidth: 1200, p: 2 }}>
+            <Card sx={{ 
+              p: 3, 
+              borderRadius: "16px", 
+              background: "rgba(30,30,30,0.95)", 
+              boxShadow: "0 8px 32px rgba(0,0,0,0.5)", 
+              backdropFilter: "blur(10px)",
+              border: "1px solid rgba(76, 175, 239, 0.2)"
+            }}>
+              <CardContent sx={{ p: 0 }}>
+                {/* Header Section */}
+                <Box sx={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center', 
+                  mb: 3,
+                  flexWrap: 'wrap',
+                  gap: 2
+                }}>
+                  <Typography variant="h4" sx={{ fontWeight: "bold", color: "#4cafef" }}>
+                    Welcome, {welcome}!
+                  </Typography>
+                  
+                  <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                     <Button
-                      type="submit"
-                      variant="contained"
-                      fullWidth
+                      size="small"
+                      variant="outlined"
+                      onClick={() => {
+                        if (userId) {
+                          api.get("/expenses")
+                            .then(res => setExpenses(res.data))
+                            .catch(() => setExpenses([]));
+                        }
+                      }}
                       sx={{
-                        mt: 2,
-                        borderRadius: "10px",
+                        borderRadius: "8px",
+                        color: "#4cafef",
+                        borderColor: "#4cafef",
                         fontWeight: "bold",
-                        py: 1.2,
-                        background: "linear-gradient(135deg, #4cafef, #1976d2)",
+                        "&:hover": {
+                          borderColor: "#4cafef",
+                          backgroundColor: "rgba(76, 175, 239, 0.1)"
+                        }
                       }}
                     >
-                      Add Expense
+                      Refresh
                     </Button>
-                  </form>
+                    <Button
+                      variant="outlined"
+                      onClick={() => {
+                        setWelcome("");
+                        setUserId("");
+                        setExpenses([]);
+                        localStorage.removeItem('user_id');
+                        localStorage.removeItem('token');
+                        localStorage.removeItem('user_name');
+                      }}
+                      sx={{
+                        borderRadius: "8px",
+                        fontWeight: "bold",
+                        color: "#ff6b6b",
+                        borderColor: "#ff6b6b",
+                        "&:hover": {
+                          borderColor: "#ff5252",
+                          backgroundColor: "rgba(255, 107, 107, 0.1)"
+                        }
+                      }}
+                    >
+                      Logout
+                    </Button>
+                  </Box>
                 </Box>
-                {/* Expense List (Right) */}
-                <Box sx={{ flex: 1.2, minWidth: 300 }}>
-                  <Typography variant="h6" sx={{ mb: 1, color: "#4cafef" }}>Your Expenses</Typography>
-                  <List>
-                    {expenses.length === 0 && (
-                      <ListItem>
-                        <ListItemText primary="No expenses yet." />
-                      </ListItem>
-                    )}
-                    {expenses.map((exp) => (
-                      <React.Fragment key={exp.id}>
-                        <ListItem>
-                          <ListItemText
-                            primary={`₹${exp.amount} - ${exp.Category?.name || ''}`}
-                            secondary={exp.description}
-                          />
-                        </ListItem>
-                        <Divider />
-                      </React.Fragment>
-                    ))}
-                  </List>
+                
+                <Divider sx={{ mb: 3 }} />
+              
+                {/* Main Content Grid */}
+                <Box sx={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: { xs: '1fr', lg: '1fr 1.2fr' }, 
+                  gap: 4,
+                  alignItems: 'start'
+                }}>
+                  {/* Expense Form (Left) */}
+                  <Card sx={{ 
+                    p: 3, 
+                    background: "rgba(76, 175, 239, 0.05)", 
+                    border: "1px solid rgba(76, 175, 239, 0.2)",
+                    borderRadius: "12px"
+                  }}>
+                    <Typography variant="h5" sx={{ mb: 3, color: "#4cafef", fontWeight: "bold" }}>
+                      Add Daily Expense
+                    </Typography>
+                    <form onSubmit={handleExpenseSubmit}>
+                      <TextField
+                        label="Amount *"
+                        name="amount"
+                        type="number"
+                        fullWidth
+                        margin="normal"
+                        value={expenseForm.amount}
+                        onChange={handleExpenseChange}
+                        required
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            borderRadius: '8px',
+                            '&:hover fieldset': {
+                              borderColor: '#4cafef',
+                            },
+                          }
+                        }}
+                      />
+                      <TextField
+                        label="Description *"
+                        name="description"
+                        fullWidth
+                        margin="normal"
+                        value={expenseForm.description}
+                        onChange={handleExpenseChange}
+                        required
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            borderRadius: '8px',
+                            '&:hover fieldset': {
+                              borderColor: '#4cafef',
+                            },
+                          }
+                        }}
+                      />
+                      <FormControl fullWidth margin="normal" required>
+                        <InputLabel>Category *</InputLabel>
+                        <Select
+                          name="category"
+                          value={expenseForm.category}
+                          label="Category *"
+                          onChange={handleExpenseChange}
+                          sx={{
+                            borderRadius: '8px',
+                            '&:hover .MuiOutlinedInput-notchedOutline': {
+                              borderColor: '#4cafef',
+                            },
+                          }}
+                        >
+                          {categories.map((cat) => (
+                            <MenuItem key={cat.id} value={cat.name}>{cat.name}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      {expenseError && (
+                        <Typography color="error" align="center" sx={{ mt: 2, p: 1, backgroundColor: 'rgba(244, 67, 54, 0.1)', borderRadius: '4px' }}>
+                          {expenseError}
+                        </Typography>
+                      )}
+                      <Button
+                        type="submit"
+                        variant="contained"
+                        fullWidth
+                        sx={{
+                          mt: 3,
+                          borderRadius: "10px",
+                          fontWeight: "bold",
+                          py: 1.5,
+                          fontSize: "1.1rem",
+                          background: "linear-gradient(135deg, #4cafef, #1976d2)",
+                          boxShadow: "0 4px 15px rgba(76, 175, 239, 0.3)",
+                          "&:hover": {
+                            background: "linear-gradient(135deg, #1976d2, #4cafef)",
+                            boxShadow: "0 6px 20px rgba(76, 175, 239, 0.4)",
+                          }
+                        }}
+                      >
+                        ADD EXPENSE
+                      </Button>
+                    </form>
+                  </Card>
+                  {/* Expense List (Right) */}
+                  <Card sx={{ 
+                    p: 3, 
+                    background: "rgba(76, 175, 239, 0.05)", 
+                    border: "1px solid rgba(76, 175, 239, 0.2)",
+                    borderRadius: "12px",
+                    height: 'fit-content'
+                  }}>
+                    <Typography variant="h5" sx={{ mb: 3, color: "#4cafef", fontWeight: "bold" }}>
+                      Your Expenses
+                    </Typography>
+                    
+                    {/* Expense Summary */}
+                    <Card sx={{ 
+                      mb: 3, 
+                      backgroundColor: 'rgba(76, 175, 239, 0.1)', 
+                      border: '1px solid rgba(76, 175, 239, 0.3)',
+                      borderRadius: '8px'
+                    }}>
+                      <CardContent sx={{ py: 2 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                          <Typography variant="body1" color="text.secondary" fontWeight="medium">
+                            Total Expenses:
+                          </Typography>
+                          <Typography variant="h5" color="#4cafef" fontWeight="bold">
+                            ₹{expenses.reduce((sum, exp) => sum + parseFloat(exp.amount), 0).toFixed(2)}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Typography variant="body1" color="text.secondary" fontWeight="medium">
+                            Total Count:
+                          </Typography>
+                          <Typography variant="h6" color="text.primary" fontWeight="bold">
+                            {expenses.length} expenses
+                          </Typography>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                    
+                    {/* Expense List */}
+                    <Box sx={{ 
+                      maxHeight: 400, 
+                      overflowY: 'auto',
+                      '&::-webkit-scrollbar': {
+                        width: '6px',
+                      },
+                      '&::-webkit-scrollbar-track': {
+                        background: 'rgba(255,255,255,0.1)',
+                        borderRadius: '3px',
+                      },
+                      '&::-webkit-scrollbar-thumb': {
+                        background: '#4cafef',
+                        borderRadius: '3px',
+                      },
+                    }}>
+                      {expenses.length === 0 ? (
+                        <Box sx={{ 
+                          textAlign: 'center', 
+                          py: 4,
+                          color: 'text.secondary'
+                        }}>
+                          <Typography variant="h6" sx={{ mb: 1 }}>
+                            No expenses yet
+                          </Typography>
+                          <Typography variant="body2">
+                            Add your first expense to get started!
+                          </Typography>
+                        </Box>
+                      ) : (
+                        expenses.map((exp, index) => (
+                          <Card key={exp.id} sx={{ 
+                            mb: 2, 
+                            backgroundColor: 'rgba(255,255,255,0.05)',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            borderRadius: '8px',
+                            '&:hover': {
+                              backgroundColor: 'rgba(255,255,255,0.08)',
+                              border: '1px solid rgba(76, 175, 239, 0.3)',
+                            }
+                          }}>
+                            <CardContent sx={{ py: 2, '&:last-child': { pb: 2 } }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                <Box sx={{ flex: 1 }}>
+                                  <Typography variant="h6" color="#4cafef" fontWeight="bold" sx={{ mb: 0.5 }}>
+                                    ₹{exp.amount} - {exp.Category?.name || 'Unknown Category'}
+                                  </Typography>
+                                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                                    {exp.description}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {new Date(exp.created_at).toLocaleDateString('en-IN')} at {new Date(exp.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                                  </Typography>
+                                </Box>
+                                <IconButton
+                                  onClick={() => handleDeleteExpense(exp.id)}
+                                  sx={{ 
+                                    color: '#ff6b6b',
+                                    '&:hover': {
+                                      backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                                    }
+                                  }}
+                                >
+                                  <DeleteIcon />
+                                </IconButton>
+                              </Box>
+                            </CardContent>
+                          </Card>
+                        ))
+                      )}
+                    </Box>
+                  </Card>
                 </Box>
-              </Box>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </Box>
         ) : (
           <Card
             sx={{

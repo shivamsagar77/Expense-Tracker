@@ -50,7 +50,7 @@ const Expense = sequelize.define('Expense', {
   timestamps: false,
 });
 
-Expense.belongsTo(Signup, { foreignKey: 'user_id' });
-Expense.belongsTo(Category, { foreignKey: 'category_id' });
+Expense.belongsTo(Signup, { foreignKey: 'user_id', as: 'User' });
+Expense.belongsTo(Category, { foreignKey: 'category_id', as: 'Category' });
 
 module.exports = Expense;
