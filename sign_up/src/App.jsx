@@ -23,8 +23,9 @@ import {
   IconButton,
   Divider,
 } from "@mui/material";
-import { Delete as DeleteIcon } from "@mui/icons-material";
+import { Delete as DeleteIcon, Payment as PaymentIcon } from "@mui/icons-material";
 import api, { expenseAPI } from "./utils/api";
+import PaymentComponent from "./components/PaymentComponent";
 
 // Dark Theme
 const darkTheme = createTheme({
@@ -63,6 +64,7 @@ export default function App() {
   const [expenseError, setExpenseError] = useState('');
   const [userId, setUserId] = useState(() => localStorage.getItem('user_id') || '');
   const [categories, setCategories] = useState([]);
+  const [paymentOpen, setPaymentOpen] = useState(false);
 
   // Check if user is already logged in on app load
   useEffect(() => {
@@ -253,6 +255,24 @@ export default function App() {
                   </Typography>
                   
                   <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<PaymentIcon />}
+                      onClick={() => setPaymentOpen(true)}
+                      sx={{
+                        borderRadius: "8px",
+                        color: "#4cafef",
+                        borderColor: "#4cafef",
+                        fontWeight: "bold",
+                        "&:hover": {
+                          borderColor: "#4cafef",
+                          backgroundColor: "rgba(76, 175, 239, 0.1)"
+                        }
+                      }}
+                    >
+                      Payment
+                    </Button>
                     <Button
                       size="small"
                       variant="outlined"
@@ -690,6 +710,36 @@ export default function App() {
                   {loginLoading ? "Logging In..." : "Login"}
                 </Button>
               </form>
+            </Box>
+          </Fade>
+        </Modal>
+
+        {/* Payment Modal */}
+        <Modal
+          open={paymentOpen}
+          onClose={() => setPaymentOpen(false)}
+          closeAfterTransition
+          BackdropComponent={Backdrop}
+          BackdropProps={{ timeout: 500 }}
+        >
+          <Fade in={paymentOpen}>
+            <Box
+              sx={{
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                width: { xs: '90%', sm: 600 },
+                maxHeight: '90vh',
+                overflowY: 'auto',
+                bgcolor: "background.paper",
+                border: "2px solid #4cafef",
+                boxShadow: 24,
+                p: 0,
+                borderRadius: 3,
+              }}
+            >
+              <PaymentComponent />
             </Box>
           </Fade>
         </Modal>

@@ -1,0 +1,265 @@
+PAYMENT FLOW DIAGRAM
+====================
+
+1. USER INTERACTION
+   ┌─────────────────┐
+   │   User Login    │
+   └─────────┬───────┘
+             │
+             ▼
+   ┌─────────────────┐
+   │ Payment Button  │
+   │     Click       │
+   └─────────┬───────┘
+             │
+             ▼
+   ┌─────────────────┐
+   │  Fill Form      │
+   │ (Phone, Email)  │
+   └─────────┬───────┘
+             │
+             ▼
+   ┌─────────────────┐
+   │   Pay Now       │
+   │    Button       │
+   └─────────┬───────┘
+             │
+             ▼
+
+2. BACKEND API CALLS
+   ┌─────────────────┐
+   │ POST /payment/  │
+   │ create-order    │
+   └─────────┬───────┘
+             │
+             ▼
+   ┌─────────────────┐
+   │ Cashfree API    │
+   │ Order Creation  │
+   └─────────┬───────┘
+             │
+             ▼
+   ┌─────────────────┐
+   │ Payment Session │
+   │      ID         │
+   └─────────┬───────┘
+             │
+             ▼
+   ┌─────────────────┐
+   │ Cashfree Popup  │
+   │   Payment UI    │
+   └─────────┬───────┘
+             │
+             ▼
+   ┌─────────────────┐
+   │ Payment Success │
+   │   Response      │
+   └─────────┬───────┘
+             │
+             ▼
+
+3. DATABASE STORAGE
+   ┌─────────────────┐
+   │ POST /payment/  │
+   │     store       │
+   └─────────┬───────┘
+             │
+             ▼
+   ┌─────────────────┐
+   │   Transaction   │
+   │     Start       │
+   └─────────┬───────┘
+             │
+             ▼
+   ┌─────────────────┐
+   │  Table 1:       │
+   │   payments      │
+   │ (Main Record)   │
+   └─────────┬───────┘
+             │
+             ▼
+   ┌─────────────────┐
+   │  Table 2:       │
+   │payment_gateway_ │
+   │   details       │
+   └─────────┬───────┘
+             │
+             ▼
+   ┌─────────────────┐
+   │  Table 3:       │
+   │payment_method_  │
+   │   details       │
+   └─────────┬───────┘
+             │
+             ▼
+   ┌─────────────────┐
+   │  Table 4:       │
+   │payment_surcharge│
+   │   _details      │
+   └─────────┬───────┘
+             │
+             ▼
+   ┌─────────────────┐
+   │  Table 5:       │
+   │international_   │
+   │payment_details  │
+   └─────────┬───────┘
+             │
+             ▼
+   ┌─────────────────┐
+   │  Table 6:       │
+   │ payment_offers  │
+   │   (Optional)    │
+   └─────────┬───────┘
+             │
+             ▼
+   ┌─────────────────┐
+   │  Table 7:       │
+   │payment_error_   │
+   │   details       │
+   │   (Optional)    │
+   └─────────┬───────┘
+             │
+             ▼
+   ┌─────────────────┐
+   │   Transaction   │
+   │    Commit       │
+   └─────────┬───────┘
+             │
+             ▼
+   ┌─────────────────┐
+   │ Payment ID      │
+   │   Returned      │
+   └─────────────────┘
+
+4. DATA RETRIEVAL
+   ┌─────────────────┐
+   │ GET /payment/   │
+   │ data/:paymentId │
+   └─────────┬───────┘
+             │
+             ▼
+   ┌─────────────────┐
+   │ Fetch Payment   │
+   │ with All        │
+   │ Associations    │
+   └─────────┬───────┘
+             │
+             ▼
+   ┌─────────────────┐
+   │ Complete        │
+   │ Payment Data    │
+   │ Returned        │
+   └─────────────────┘
+
+5. USER PAYMENTS
+   ┌─────────────────┐
+   │ GET /payment/   │
+   │ user-payments   │
+   └─────────┬───────┘
+             │
+             ▼
+   ┌─────────────────┐
+   │ Fetch All       │
+   │ User Payments   │
+   │ with Gateway    │
+   │ & Method Details│
+   └─────────┬───────┘
+             │
+             ▼
+   ┌─────────────────┐
+   │ Payment History │
+   │   Returned      │
+   └─────────────────┘
+
+DATABASE TABLES STRUCTURE
+=========================
+
+payments (Main Table)
+├── id (Primary Key)
+├── cf_payment_id (Unique)
+├── order_id
+├── user_id (Foreign Key)
+├── payment_amount
+├── payment_status
+├── authorizations
+└── ... other fields
+
+payment_gateway_details
+├── id (Primary Key)
+├── payment_id (Foreign Key → payments.id)
+├── gateway_name
+├── gateway_settlement
+└── ... other fields
+
+payment_method_details
+├── id (Primary Key)
+├── payment_id (Foreign Key → payments.id)
+├── method_type
+├── upi_id
+└── ... other fields
+
+payment_surcharge_details
+├── id (Primary Key)
+├── payment_id (Foreign Key → payments.id)
+├── service_charge
+├── service_tax
+└── total_surcharge
+
+international_payment_details
+├── id (Primary Key)
+├── payment_id (Foreign Key → payments.id)
+├── is_international
+└── ... other fields
+
+payment_offers (Optional)
+├── id (Primary Key)
+├── payment_id (Foreign Key → payments.id)
+├── offer_id
+├── discount_amount
+└── ... other fields
+
+payment_error_details (Optional)
+├── id (Primary Key)
+├── payment_id (Foreign Key → payments.id)
+├── error_code
+├── error_message
+└── ... other fields
+
+API TO TABLE MAPPING
+====================
+
+POST /payment/create-order
+├── ❌ No database entry
+└── 🔄 Cashfree API call only
+
+POST /payment/store
+├── ✅ payments (main record)
+├── ✅ payment_gateway_details
+├── ✅ payment_method_details
+├── ✅ payment_surcharge_details
+├── ✅ international_payment_details
+├── ✅ payment_offers (if any)
+└── ✅ payment_error_details (if any)
+
+GET /payment/data/:paymentId
+├── ✅ payments (main record)
+├── ✅ payment_gateway_details (via association)
+├── ✅ payment_method_details (via association)
+├── ✅ payment_surcharge_details (via association)
+├── ✅ international_payment_details (via association)
+├── ✅ payment_offers (via association)
+└── ✅ payment_error_details (via association)
+
+GET /payment/user-payments
+├── ✅ payments (filtered by user_id)
+├── ✅ payment_gateway_details (via association)
+└── ✅ payment_method_details (via association)
+
+GET /payment/status/:orderId
+├── ❌ No database entry
+└── 🔄 Cashfree API call only
+
+POST /payment/callback
+├── 📝 Logs only
+└── 🔄 Update status (if needed)

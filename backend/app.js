@@ -10,6 +10,7 @@ const login = require('./routes/login')
 const category = require('./routes/category')
 const expense = require('./routes/expense')
 const verify = require('./routes/verify')
+const payment = require('./routes/payment')
 // Middleware
 app.use(cors());
 app.use(express.json()); // Parse incoming JSON
@@ -24,6 +25,7 @@ app.use("/login",login)
 app.use("/categories", category)
 app.use("/expenses", expense)
 app.use("/verify", verify)
+app.use("/payment", payment)
 const PORT = process.env.PORT || 5000;
 
   app.listen(PORT, () => {
