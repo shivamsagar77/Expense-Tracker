@@ -14,8 +14,8 @@ const signUpController = {
         return res.status(400).json({ message: "All fields are required" });
       }
 
-      // check if user already exists
-      const existingUser = await Signup.findOne({ where: { email } });
+      // check if user already exists (case insensitive)
+      const existingUser = await Signup.findOne({ where: { email: email.toLowerCase() } });
       if (existingUser) {
         return res.status(409).json({ message: "User already exists with this email" });
       }
@@ -23,11 +23,11 @@ const signUpController = {
       // hash password
       const hashedPassword = await bcrypt.hash(password, 10);
 
-      // create new user
+      // create new user (store email in lowercase)
       const newUser = await Signup.create({
         name,
         phone,
-        email,
+        email: email.toLowerCase(),
         password: hashedPassword,
         created_at: new Date(),
       });
@@ -37,7 +37,8 @@ const signUpController = {
         { 
           userId: newUser.id, 
           email: newUser.email, 
-          name: newUser.name 
+          name: newUser.name,
+          ispremimumuser: newUser.ispremimumuser
         },
         JWT_SECRET,
         { expiresIn: '24h' }

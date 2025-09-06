@@ -1,5 +1,5 @@
 const { DataTypes } = require('sequelize');
-const sequelize = require('../config/db'); // Sequelize instance
+const { sequelize } = require('../config/db'); // Sequelize instance
 
 const Bustable = sequelize.define('Bustable', {
   id: {

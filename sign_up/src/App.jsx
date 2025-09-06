@@ -22,6 +22,7 @@ import {
   ListItemSecondaryAction,
   IconButton,
   Divider,
+  Alert,
 } from "@mui/material";
 import { Delete as DeleteIcon, Payment as PaymentIcon } from "@mui/icons-material";
 import api, { expenseAPI } from "./utils/api";
@@ -63,6 +64,7 @@ export default function App() {
   const [expenseForm, setExpenseForm] = useState({ amount: '', description: '', category: '' });
   const [expenseError, setExpenseError] = useState('');
   const [userId, setUserId] = useState(() => localStorage.getItem('user_id') || '');
+  const [isPremiumUser, setIsPremiumUser] = useState(() => localStorage.getItem('ispremimumuser') === 'true');
   const [categories, setCategories] = useState([]);
   const [paymentOpen, setPaymentOpen] = useState(false);
 
@@ -71,10 +73,12 @@ export default function App() {
     const token = localStorage.getItem('token');
     const storedUserId = localStorage.getItem('user_id');
     const storedUserName = localStorage.getItem('user_name');
+    const storedIsPremium = localStorage.getItem('ispremimumuser');
     
     if (token && storedUserId && storedUserName) {
       setWelcome(storedUserName);
       setUserId(storedUserId);
+      setIsPremiumUser(storedIsPremium === 'true');
     }
   }, []);
 
@@ -169,20 +173,34 @@ export default function App() {
 
   // submit
   const handleSubmit = async (e) => {
+    console.log("Signup attempt started...");
     e.preventDefault();
     if (validate()) {
       setLoading(true);
       try {
+        console.log("Sending signup request...");
         const res = await api.post("/signup", formData);
-        alert("Signup successful: " + res.data.message);
-        // Auto-login after signup
-        setWelcome(res.data.user.name);
-        setUserId(res.data.user.id);
-        localStorage.setItem('user_id', res.data.user.id);
-        localStorage.setItem('token', res.data.token);
-        localStorage.setItem('user_name', res.data.user.name);
+        console.log("Signup response:", res.data);
+        
+        if (res.data.message === "User signed up successfully") {
+          alert("Signup successful: " + res.data.message);
+          
+          // Auto-login after signup
+          setWelcome(res.data.user.name);
+          setUserId(res.data.user.id);
+          setIsPremiumUser(res.data.user.ispremimumuser === true);
+          localStorage.setItem('user_id', res.data.user.id);
+          localStorage.setItem('token', res.data.token);
+          localStorage.setItem('user_name', res.data.user.name);
+          localStorage.setItem('ispremimumuser', res.data.user.ispremimumuser);
+          
+          console.log("Signup successful, user data saved");
+        } else {
+          alert("Signup failed: " + res.data.message);
+        }
       } catch (err) {
-        alert("Error: " + (err.response?.data?.message || err.message));
+        console.error("Signup error:", err);
+        alert("Error: " + (err.response?.data?.message || err.message || "Signup failed. Please try again."));
       } finally {
         setLoading(false);
       }
@@ -197,17 +215,35 @@ export default function App() {
     e.preventDefault();
     setLoginError("");
     setLoginLoading(true);
+    
     try {
-              const res = await api.post("/login", loginData);
-              setWelcome(res.data.name);
-        setUserId(res.data.user_id);
+      const res = await api.post("/login", loginData);
+      console.log("Login response:", res.data);
+      
+      if (res.data.message === 'Login successful') {
+        // Save to localStorage first
         localStorage.setItem('user_id', res.data.user_id);
         localStorage.setItem('token', res.data.token);
         localStorage.setItem('user_name', res.data.name);
-      setLoginOpen(false);
-      setLoginData({ email: "", password: "" });
+        localStorage.setItem('ispremimumuser', res.data.ispremimumuser);
+        
+        // Set user data in state
+        setWelcome(res.data.name);
+        setUserId(res.data.user_id);
+        setIsPremiumUser(res.data.ispremimumuser === true);
+        
+        // Close login modal and reset form
+        setLoginOpen(false);
+        setLoginData({ email: "", password: "" });
+        
+        // Show success message
+        alert(`Login successful! Welcome ${res.data.name}`);
+      } else {
+        setLoginError("Login failed. Please try again.");
+      }
     } catch (err) {
-      setLoginError(err.response?.data?.message || err.message);
+      console.error("Login error:", err);
+      setLoginError(err.response?.data?.message || err.message || "Login failed. Please try again.");
     } finally {
       setLoginLoading(false);
     }
@@ -250,9 +286,50 @@ export default function App() {
                   flexWrap: 'wrap',
                   gap: 2
                 }}>
-                  <Typography variant="h4" sx={{ fontWeight: "bold", color: "#4cafef" }}>
-                    Welcome, {welcome}!
-                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                    <Typography variant="h4" sx={{ fontWeight: "bold", color: "#4cafef" }}>
+                      Welcome, {welcome}!
+                    </Typography>
+                    {isPremiumUser && (
+                      <Box
+                        sx={{
+                          position: 'relative',
+                          background: 'linear-gradient(45deg, #FFD700, #FFA500, #FFD700)',
+                          backgroundSize: '200% 200%',
+                          animation: 'shimmer 2s ease-in-out infinite',
+                          borderRadius: '20px',
+                          px: 2,
+                          py: 0.5,
+                          boxShadow: '0 4px 15px rgba(255, 215, 0, 0.4)',
+                          border: '2px solid rgba(255, 215, 0, 0.6)',
+                          '@keyframes shimmer': {
+                            '0%': {
+                              backgroundPosition: '0% 50%',
+                            },
+                            '50%': {
+                              backgroundPosition: '100% 50%',
+                            },
+                            '100%': {
+                              backgroundPosition: '0% 50%',
+                            },
+                          },
+                        }}
+                      >
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontWeight: 'bold',
+                            color: '#000',
+                            textShadow: '0 1px 2px rgba(255,255,255,0.5)',
+                            fontSize: '0.75rem',
+                            letterSpacing: '0.5px',
+                          }}
+                        >
+                          ⭐ PREMIUM USER ⭐
+                        </Typography>
+                      </Box>
+                    )}
+                  </Box>
                   
                   <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                     <Button
@@ -301,10 +378,12 @@ export default function App() {
                       onClick={() => {
                         setWelcome("");
                         setUserId("");
+                        setIsPremiumUser(false);
                         setExpenses([]);
                         localStorage.removeItem('user_id');
                         localStorage.removeItem('token');
                         localStorage.removeItem('user_name');
+                        localStorage.removeItem('ispremimumuser');
                       }}
                       sx={{
                         borderRadius: "8px",
@@ -690,9 +769,9 @@ export default function App() {
                   required
                 />
                 {loginError && (
-                  <Typography color="error" align="center" sx={{ mt: 1 }}>
+                  <Alert severity="error" sx={{ mt: 1 }}>
                     {loginError}
-                  </Typography>
+                  </Alert>
                 )}
                 <Button
                   type="submit"

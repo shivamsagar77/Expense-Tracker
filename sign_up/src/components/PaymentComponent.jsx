@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { load } from "@cashfreepayments/cashfree-js";
-import { Button, Box, Typography, TextField, Alert, CircularProgress } from '@mui/material';
-import axios from 'axios';
+import { Button, Box, Typography, TextField, Alert, CircularProgress, Chip } from '@mui/material';
+import { paymentAPI } from '../utils/api';
 
 const PaymentComponent = () => {
     const [cashfree, setCashfree] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const [ispremimumuser, setispremimumuser] = useState(false);
+    const [premiumLoading, setPremiumLoading] = useState(false);
     const [paymentData, setPaymentData] = useState({
         amount: 1200, // Fixed amount
         customerPhone: '',
@@ -28,6 +30,47 @@ const PaymentComponent = () => {
             }
         };
         initializeSDK();
+    }, []);
+
+    // JWT token से premium status extract करने के लिए function
+    const getPremiumStatusFromToken = () => {
+        try {
+            const token = localStorage.getItem('token');
+            if (token) {
+                // JWT token decode करना (without verification - just for reading)
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                return payload.ispremimumuser || false;
+            }
+        } catch (error) {
+            console.error('Token decode error:', error);
+        }
+        return false;
+    };
+
+    // Premium status check करने के लिए function
+    const checkPremiumStatus = async () => {
+        try {
+            setPremiumLoading(true);
+            
+            // पहले JWT token से check करना (faster)
+            const tokenPremiumStatus = getPremiumStatusFromToken();
+            setispremimumuser(tokenPremiumStatus);
+            
+            // फिर API से verify करना (optional)
+            const response = await paymentAPI.getPremiumStatus();
+            if (response.data.success) {
+                setispremimumuser(response.data.data.ispremimumuser);
+            }
+        } catch (error) {
+            console.error('Premium status check error:', error);
+        } finally {
+            setPremiumLoading(false);
+        }
+    };
+
+    // Component mount होने पर premium status check करना
+    useEffect(() => {
+        checkPremiumStatus();
     }, []);
 
     // Input handle करने के लिए function
@@ -62,17 +105,11 @@ const PaymentComponent = () => {
             }
 
             // Backend से order create करना
-            const token = localStorage.getItem('token');
-            const response = await axios.post('http://localhost:5000/payment/create-order', {
+            const response = await paymentAPI.createOrder({
                 amount: paymentData.amount,
                 customerId: userId, // User ID automatically customer ID बन जाएगा
                 customerPhone: paymentData.customerPhone,
                 customerEmail: paymentData.customerEmail
-            }, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
             });
 
             if (response.data.success) {
@@ -96,9 +133,25 @@ const PaymentComponent = () => {
                     setSuccess('Payment completed successfully!');
                     console.log("Payment Details:", result.paymentDetails);
                     
-                    // Payment status check करना
+                    // Payment status check करना और premium status update करना
                     setTimeout(() => {
                         checkPaymentStatus(response.data.data.orderId);
+                        // Premium status भी check करना
+                        setTimeout(async () => {
+                            // Token refresh करना payment success के बाद
+                            try {
+                                const refreshResponse = await paymentAPI.refreshToken();
+                                if (refreshResponse.data.success) {
+                                    // New token को localStorage में save करना
+                                    localStorage.setItem('token', refreshResponse.data.data.token);
+                                    console.log('Token refreshed after payment success');
+                                }
+                            } catch (refreshError) {
+                                console.error('Token refresh error:', refreshError);
+                            }
+                            
+                            checkPremiumStatus();
+                        }, 3000);
                     }, 2000);
                 }
             } else {
@@ -115,16 +168,32 @@ const PaymentComponent = () => {
     // Payment status check करने के लिए function
     const checkPaymentStatus = async (orderId) => {
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get(`http://localhost:5000/payment/status/${orderId}`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
+            const response = await paymentAPI.getPaymentStatus(orderId);
 
             if (response.data.success) {
                 console.log('Payment Status:', response.data.data);
-                setSuccess(`Payment Status: ${response.data.data[0]?.payment_status || 'Unknown'}`);
+                const paymentStatus = response.data.data[0]?.payment_status || 'Unknown';
+                setSuccess(`Payment Status: ${paymentStatus}`);
+                
+                // अगर payment successful है तो premium status check करना
+                if (paymentStatus === 'SUCCESS') {
+                    setTimeout(async () => {
+                        // Token refresh करना payment success के बाद
+                        try {
+                            const refreshResponse = await paymentAPI.refreshToken();
+                            if (refreshResponse.data.success) {
+                                // New token को localStorage में save करना
+                                localStorage.setItem('token', refreshResponse.data.data.token);
+                                console.log('Token refreshed after payment success');
+                            }
+                        } catch (refreshError) {
+                            console.error('Token refresh error:', refreshError);
+                        }
+                        
+                        // Premium status check करना
+                        checkPremiumStatus();
+                    }, 1000);
+                }
             }
         } catch (error) {
             console.error('Status Check Error:', error);
@@ -136,6 +205,20 @@ const PaymentComponent = () => {
             <Typography variant="h4" component="h1" gutterBottom align="center">
                 Payment - ₹1200
             </Typography>
+
+            {/* Premium Status Display */}
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+                {premiumLoading ? (
+                    <CircularProgress size={20} />
+                ) : (
+                    <Chip
+                        label={ispremimumuser ? "🌟 Premium User" : "👤 Regular User"}
+                        color={ispremimumuser ? "success" : "default"}
+                        variant={ispremimumuser ? "filled" : "outlined"}
+                        sx={{ fontWeight: 'bold' }}
+                    />
+                )}
+            </Box>
 
             {error && (
                 <Alert severity="error" sx={{ mb: 2 }}>
@@ -149,14 +232,25 @@ const PaymentComponent = () => {
                 </Alert>
             )}
 
-            <Alert severity="info" sx={{ mb: 2 }}>
-                <Typography variant="body2">
-                    <strong>Payment Details:</strong><br/>
-                    • Amount: ₹1200 (Fixed)<br/>
-                    • Customer ID: Your User ID (Auto-filled)<br/>
-                    • Please enter your phone number to proceed
-                </Typography>
-            </Alert>
+            {ispremimumuser ? (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                    <Typography variant="body2">
+                        <strong>🎉 Congratulations! You are a Premium User!</strong><br/>
+                        • You have access to all premium features<br/>
+                        • No need to pay again<br/>
+                        • Enjoy your premium experience!
+                    </Typography>
+                </Alert>
+            ) : (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                    <Typography variant="body2">
+                        <strong>Payment Details:</strong><br/>
+                        • Amount: ₹1200 (Fixed)<br/>
+                        • Customer ID: Your User ID (Auto-filled)<br/>
+                        • Please enter your phone number to proceed
+                    </Typography>
+                </Alert>
+            )}
 
             <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <TextField
@@ -191,9 +285,9 @@ const PaymentComponent = () => {
 
                 <Button
                     variant="contained"
-                    color="primary"
+                    color={ispremimumuser ? "success" : "primary"}
                     onClick={doPayment}
-                    disabled={loading || !cashfree}
+                    disabled={loading || !cashfree || ispremimumuser}
                     fullWidth
                     sx={{ mt: 2, py: 1.5 }}
                 >
@@ -202,6 +296,8 @@ const PaymentComponent = () => {
                             <CircularProgress size={20} sx={{ mr: 1 }} />
                             Processing...
                         </>
+                    ) : ispremimumuser ? (
+                        '✅ Already Premium User'
                     ) : (
                         'Pay Now'
                     )}

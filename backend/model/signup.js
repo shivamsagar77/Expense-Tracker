@@ -1,5 +1,5 @@
 const { DataTypes } = require('sequelize');
-const sequelize = require('../config/db'); // Sequelize instance
+const { sequelize } = require('../config/db'); // Sequelize instance
 
 const Signup = sequelize.define('Signup', {
   id: {
@@ -31,6 +31,11 @@ const Signup = sequelize.define('Signup', {
     type: DataTypes.DATE,
     allowNull: false,
     defaultValue: DataTypes.NOW,
+  },
+  ispremimumuser: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
   },
 }, {
   tableName: 'signup',
