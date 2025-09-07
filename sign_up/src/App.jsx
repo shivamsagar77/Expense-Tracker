@@ -67,6 +67,8 @@ export default function App() {
   const [isPremiumUser, setIsPremiumUser] = useState(() => localStorage.getItem('ispremimumuser') === 'true');
   const [categories, setCategories] = useState([]);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [leaderboardOpen, setLeaderboardOpen] = useState(false);
+  const [leaderboard, setLeaderboard] = useState([]);
 
   // Check if user is already logged in on app load
   useEffect(() => {
@@ -350,6 +352,33 @@ export default function App() {
                     >
                       Payment
                     </Button>
+                    {isPremiumUser && (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={async () => {
+                          try {
+                            const res = await api.get('/expenses/leaderboard');
+                            setLeaderboard(res.data || []);
+                            setLeaderboardOpen(true);
+                          } catch (err) {
+                            alert('Failed to load leaderboard: ' + (err.response?.data?.message || err.message));
+                          }
+                        }}
+                        sx={{
+                          borderRadius: '8px',
+                          color: '#FFD700',
+                          borderColor: '#FFD700',
+                          fontWeight: 'bold',
+                          '&:hover': {
+                            borderColor: '#FFC107',
+                            backgroundColor: 'rgba(255, 215, 0, 0.1)'
+                          }
+                        }}
+                      >
+                        Leaderboard
+                      </Button>
+                    )}
                     <Button
                       size="small"
                       variant="outlined"
@@ -789,6 +818,52 @@ export default function App() {
                   {loginLoading ? "Logging In..." : "Login"}
                 </Button>
               </form>
+            </Box>
+          </Fade>
+        </Modal>
+
+        {/* Leaderboard Modal */}
+        <Modal
+          open={leaderboardOpen}
+          onClose={() => setLeaderboardOpen(false)}
+          closeAfterTransition
+          BackdropComponent={Backdrop}
+          BackdropProps={{ timeout: 500 }}
+        >
+          <Fade in={leaderboardOpen}>
+            <Box
+              sx={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                width: { xs: '90%', sm: 600 },
+                maxHeight: '80vh',
+                overflowY: 'auto',
+                bgcolor: 'background.paper',
+                border: '2px solid #FFD700',
+                boxShadow: 24,
+                p: 3,
+                borderRadius: 3,
+              }}
+            >
+              <Typography variant="h5" sx={{ mb: 2, fontWeight: 'bold', color: '#FFD700' }}>
+                Premium Leaderboard
+              </Typography>
+              {leaderboard.length === 0 ? (
+                <Typography color="text.secondary">No data available.</Typography>
+              ) : (
+                <List>
+                  {leaderboard.map((u, idx) => (
+                    <ListItem key={u.id} divider>
+                      <ListItemText
+                        primary={`${idx + 1}. ${u.name} (${u.email})`}
+                        secondary={`Total Expense: ₹${parseFloat(u.totalexpene || 0).toFixed(2)}`}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              )}
             </Box>
           </Fade>
         </Modal>

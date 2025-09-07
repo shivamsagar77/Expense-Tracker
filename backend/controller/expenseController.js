@@ -1,6 +1,7 @@
 const Expense = require('../model/Expense');
 const Category = require('../model/Category');
-
+const Signup = require('../model/signup');
+const { sequelize } = require('../config/db');
 exports.addExpense = async (req, res) => {
   try {
     const { amount, description, category_id } = req.body;
@@ -9,6 +10,12 @@ exports.addExpense = async (req, res) => {
     if (!amount || !description || !category_id) {
       return res.status(400).json({ message: 'Amount, description, and category are required' });
     }
+    // Safely update cumulative total in Signup
+    const fetchuser = await Signup.findByPk(user_id);
+    const previousTotal = parseFloat(fetchuser?.totalexpene || 0);
+    const amountNumber = parseFloat(amount);
+    const newTotal = previousTotal + (isNaN(amountNumber) ? 0 : amountNumber);
+    await Signup.update({ totalexpene: newTotal }, { where: { id: user_id } });
     
     const expense = await Expense.create({ user_id, amount, description, category_id });
     res.status(201).json(expense);
@@ -36,6 +43,29 @@ exports.getExpensesByUser = async (req, res) => {
   } catch (err) {
     console.error('Error fetching expenses:', err);
     res.status(500).json({ message: 'Error fetching expenses', error: err.message });
+  }
+};
+
+// Leaderboard: sum of expenses per user (premium only access)
+exports.getLeaderboard = async (req, res) => {
+  try {
+    // Only premium users can view leaderboard
+    const isPremium = req.user?.ispremimumuser === true;
+    if (!isPremium) {
+      return res.status(403).json({ message: 'Premium feature only' });
+    }
+
+    // Prefer using accumulated totalexpene to avoid heavy aggregation
+    const topUsers = await Signup.findAll({
+      attributes: ['id', 'name', 'email', 'totalexpene', 'ispremimumuser'],
+      order: [[sequelize.literal('totalexpene'), 'DESC']],
+      limit: 50
+    });
+
+    return res.json(topUsers);
+  } catch (err) {
+    console.error('Error generating leaderboard:', err);
+    return res.status(500).json({ message: 'Error generating leaderboard', error: err.message });
   }
 };
 

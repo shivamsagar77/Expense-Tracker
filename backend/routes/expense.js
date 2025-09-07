@@ -9,5 +9,7 @@ const authMiddleware = require('../middleware/auth');
 router.post('/',authMiddleware, expenseController.addExpense);
 router.get('/',authMiddleware, expenseController.getExpensesByUser);
 router.delete('/:id',authMiddleware, expenseController.deleteExpense);
+// Leaderboard (premium only)
+router.get('/leaderboard', authMiddleware, expenseController.getLeaderboard);
 
 module.exports = router;

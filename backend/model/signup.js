@@ -15,6 +15,11 @@ const Signup = sequelize.define('Signup', {
     type: DataTypes.STRING,
     allowNull: false,
   },
+  totalexpene: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: false,
+    defaultValue: 0,
+  },
   email: {
     type: DataTypes.STRING,
     allowNull: false,
@@ -26,6 +31,12 @@ const Signup = sequelize.define('Signup', {
   password: {
     type: DataTypes.STRING,
     allowNull: false,
+  },
+  // Total expense accumulated by the user
+  totalexpene: {
+    type: DataTypes.DECIMAL(12, 2),
+    allowNull: false,
+    defaultValue: 0.00,
   },
   created_at: {
     type: DataTypes.DATE,
