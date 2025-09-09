@@ -2,10 +2,12 @@ const Expense = require('../model/Expense');
 const Category = require('../model/Category');
 const Signup = require('../model/signup');
 const { sequelize } = require('../config/db');
+const { Transaction } = require('sequelize');
 exports.addExpense = async (req, res) => {
   try {
     const { amount, description, category_id } = req.body;
     const user_id = req.user.userId; // Get user ID from JWT token
+    const t = await sequelize.transaction();  
     
     if (!amount || !description || !category_id) {
       return res.status(400).json({ message: 'Amount, description, and category are required' });
@@ -15,13 +17,16 @@ exports.addExpense = async (req, res) => {
     const previousTotal = parseFloat(fetchuser?.totalexpene || 0);
     const amountNumber = parseFloat(amount);
     const newTotal = previousTotal + (isNaN(amountNumber) ? 0 : amountNumber);
-    await Signup.update({ totalexpene: newTotal }, { where: { id: user_id } });
+    await Signup.update({ totalexpene: newTotal }, { where: { id: user_id} },{transaction:t});
     
-    const expense = await Expense.create({ user_id, amount, description, category_id });
+    const expense = await Expense.create({ user_id, amount, description, category_id },{transaction:t});
+    await t.commit();
     res.status(201).json(expense);
-  } catch (err) {
-    res.status(500).json({ message: 'Error adding expense', error: err.message });
-  }
+  } catch (error) {
+    await t.rollback();
+    console.error('Error adding expense:', error);
+    res.status(500).json({ message: 'Error adding expense', error: error.message });
+  } 
 };
 
 exports.getExpensesByUser = async (req, res) => {
@@ -82,7 +87,13 @@ exports.deleteExpense = async (req, res) => {
     if (!expense) {
       return res.status(404).json({ message: 'Expense not found or already deleted' });
     }
-    
+
+    const fetchuser = await Signup.findByPk(user_id);
+    const previousTotal = parseFloat(fetchuser?.totalexpene || 0);
+    const amountNumber = parseFloat(expense.amount);
+    const newTotal = previousTotal - (isNaN(amountNumber) ? 0 : amountNumber);
+    await Signup.update({ totalexpene: newTotal }, { where: { id: user_id } });
+
     // Soft delete by setting deleted_at timestamp
     await Expense.update(
       { deleted_at: new Date() },
