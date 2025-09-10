@@ -5,7 +5,7 @@ const { sequelize } = require('../config/db');
 const { Transaction } = require('sequelize');
 exports.addExpense = async (req, res) => {
   try {
-    const { amount, description, category_id, income_amount, income_description, income_source } = req.body;
+    const { amount, description, category_id, income_amount, income_description, income_source, note } = req.body;
     const user_id = req.user.userId; // Get user ID from JWT token
     const isPremium = req.user?.ispremimumuser === true;
     const t = await sequelize.transaction();  
@@ -30,7 +30,8 @@ exports.addExpense = async (req, res) => {
         category_id: 1, // Default category ID
         income_amount: parseFloat(income_amount),
         income_description: income_description,
-        income_source: income_source || "Unknown"
+        income_source: income_source || "Unknown",
+        note: note || null
       },{transaction:t});
       
       await t.commit();
@@ -55,7 +56,8 @@ exports.addExpense = async (req, res) => {
         category_id,
         income_amount: 0,
         income_description: null,
-        income_source: null
+        income_source: null,
+        note: note || null
       },{transaction:t});
       
       await t.commit();

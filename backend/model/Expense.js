@@ -38,6 +38,11 @@ const Expense = sequelize.define('Expense', {
       key: 'id',
     },
   },
+  note: {
+    type: DataTypes.STRING(500),
+    allowNull: true,
+    defaultValue: null,
+  },
   created_at: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,

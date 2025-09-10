@@ -83,7 +83,7 @@ export default function App() {
   const [loginLoading, setLoginLoading] = useState(false);
   const [welcome, setWelcome] = useState("");
   const [expenses, setExpenses] = useState([]);
-  const [expenseForm, setExpenseForm] = useState({ amount: '', description: '', category: '' });
+  const [expenseForm, setExpenseForm] = useState({ amount: '', description: '', category: '', note: '' });
   const [expenseError, setExpenseError] = useState('');
   const [userId, setUserId] = useState(() => localStorage.getItem('user_id') || '');
   const [isPremiumUser, setIsPremiumUser] = useState(() => localStorage.getItem('ispremimumuser') === 'true');
@@ -253,9 +253,10 @@ export default function App() {
         amount: expenseForm.amount,
         description: expenseForm.description,
         category_id: selectedCategory.id,
+        note: expenseForm.note || null,
       });
       setExpenses([res.data, ...expenses]);
-      setExpenseForm({ amount: '', description: '', category: '' });
+      setExpenseForm({ amount: '', description: '', category: '', note: '' });
 
       api.get("/expenses")
         .then(res => setExpenses(res.data))
@@ -971,6 +972,23 @@ export default function App() {
                           ))}
                         </Select>
                       </FormControl>
+                      <TextField
+                        label="Note (Optional)"
+                        name="note"
+                        fullWidth
+                        margin="normal"
+                        value={expenseForm.note}
+                        onChange={handleExpenseChange}
+                        placeholder="Add a short note or comment..."
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            borderRadius: '8px',
+                            '&:hover fieldset': {
+                              borderColor: '#4cafef',
+                            },
+                          }
+                        }}
+                      />
                       {expenseError && (
                         <Typography color="error" align="center" sx={{ mt: 2, p: 1, backgroundColor: 'rgba(244, 67, 54, 0.1)', borderRadius: '4px' }}>
                           {expenseError}
@@ -1094,6 +1112,18 @@ export default function App() {
                                   <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                                     {exp.description}
                                   </Typography>
+                                  {exp.note && (
+                                    <Typography variant="body2" color="text.primary" sx={{ 
+                                      mb: 1, 
+                                      fontStyle: 'italic',
+                                      backgroundColor: 'rgba(76, 175, 239, 0.1)',
+                                      padding: '4px 8px',
+                                      borderRadius: '4px',
+                                      border: '1px solid rgba(76, 175, 239, 0.2)'
+                                    }}>
+                                      💬 {exp.note}
+                                    </Typography>
+                                  )}
                                   <Typography variant="caption" color="text.secondary">
                                     {new Date(exp.created_at).toLocaleDateString('en-IN')} at {new Date(exp.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                                   </Typography>
