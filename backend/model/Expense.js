@@ -21,6 +21,11 @@ const Expense = sequelize.define('Expense', {
     type: DataTypes.DECIMAL(10, 2),
     allowNull: false,
   },
+  income_amount: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    defaultValue: 0,
+  },
   description: {
     type: DataTypes.TEXT,
     allowNull: false,

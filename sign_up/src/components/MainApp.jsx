@@ -24,8 +24,25 @@ import {
   Divider,    
   Alert,
   Snackbar,
+  Tabs,
+  Tab,
+  Chip,
+  Grid,
+  Paper,
+  LinearProgress,
 } from "@mui/material";
-import { Delete as DeleteIcon, Payment as PaymentIcon } from "@mui/icons-material";
+import { 
+  Delete as DeleteIcon, 
+  Payment as PaymentIcon,
+  Download as DownloadIcon,
+  TrendingUp as TrendingUpIcon,
+  TrendingDown as TrendingDownIcon,
+  CalendarToday as CalendarTodayIcon,
+  AttachMoney as AttachMoneyIcon,
+  Receipt as ReceiptIcon,
+  AccountBalance as AccountBalanceIcon,
+  FilterList as FilterListIcon,
+} from "@mui/icons-material";
 import api, { expenseAPI } from "../utils/api";
 import PaymentComponent from "./PaymentComponent";
 
@@ -75,6 +92,67 @@ export default function App() {
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [leaderboard, setLeaderboard] = useState([]);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  
+  // New state for enhanced dashboard
+  const [activeTab, setActiveTab] = useState(0);
+  const [timeFilter, setTimeFilter] = useState('all'); // 'all', 'daily', 'weekly', 'monthly'
+  const [incomes, setIncomes] = useState([]);
+  const [incomeForm, setIncomeForm] = useState({ amount: '', description: '', source: '' });
+  const [incomeError, setIncomeError] = useState('');
+  const [filteredExpenses, setFilteredExpenses] = useState([]);
+  const [filteredIncomes, setFilteredIncomes] = useState([]);
+  
+  // Pagination state
+  const [currentExpensePage, setCurrentExpensePage] = useState(1);
+  const [currentIncomePage, setCurrentIncomePage] = useState(1);
+  const [screenSize, setScreenSize] = useState('medium');
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  // Dynamic items per page based on screen size
+  const getItemsPerPage = (size) => {
+    switch (size) {
+      case 'small': return 5;   // Mobile phones
+      case 'medium': return 10; // Tablets
+      case 'large': return 20;  // Desktop
+      case 'xlarge': return 40; // Large desktop
+      default: return 10;
+    }
+  };
+
+  // Screen size detection
+  useEffect(() => {
+    const handleResize = () => {
+      const width = window.innerWidth;
+      if (width < 600) {
+        setScreenSize('small');
+      } else if (width < 900) {
+        setScreenSize('medium');
+      } else if (width < 1200) {
+        setScreenSize('large');
+      } else {
+        setScreenSize('xlarge');
+      }
+    };
+
+    // Initial detection
+    handleResize();
+
+    // Add event listener
+    window.addEventListener('resize', handleResize);
+
+    // Cleanup
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Update items per page when screen size changes
+  useEffect(() => {
+    const newItemsPerPage = getItemsPerPage(screenSize);
+    setItemsPerPage(newItemsPerPage);
+    
+    // Reset to first page when items per page changes
+    setCurrentExpensePage(1);
+    setCurrentIncomePage(1);
+  }, [screenSize]);
 
   // Check if user is already logged in on app load
   useEffect(() => {
@@ -107,6 +185,55 @@ export default function App() {
         .catch(() => setExpenses([]));
     }
   }, [welcome, userId]);
+
+  // Extract income data from expenses (premium users only)
+  useEffect(() => {
+    if (welcome && isPremiumUser) {
+      const incomeData = expenses
+        .filter(exp => exp.income_amount && exp.income_amount > 0)
+        .map(exp => ({
+          id: exp.id,
+          amount: exp.income_amount,
+          description: exp.income_description || 'Income',
+          source: exp.income_source || 'Unknown',
+          created_at: exp.created_at
+        }));
+      setIncomes(incomeData);
+    } else {
+      setIncomes([]);
+    }
+  }, [welcome, isPremiumUser, expenses]);
+
+  // Filter data based on time filter
+  useEffect(() => {
+    const now = new Date();
+    let filteredExp = expenses;
+    let filteredInc = incomes;
+
+    switch (timeFilter) {
+      case 'daily':
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        filteredExp = expenses.filter(exp => new Date(exp.created_at) >= today);
+        filteredInc = incomes.filter(inc => new Date(inc.created_at) >= today);
+        break;
+      case 'weekly':
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        filteredExp = expenses.filter(exp => new Date(exp.created_at) >= weekAgo);
+        filteredInc = incomes.filter(inc => new Date(inc.created_at) >= weekAgo);
+        break;
+      case 'monthly':
+        const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        filteredExp = expenses.filter(exp => new Date(exp.created_at) >= monthAgo);
+        filteredInc = incomes.filter(inc => new Date(inc.created_at) >= monthAgo);
+        break;
+      default:
+        // 'all' - no filtering
+        break;
+    }
+
+    setFilteredExpenses(filteredExp);
+    setFilteredIncomes(filteredInc);
+  }, [expenses, incomes, timeFilter]);
 
   // Add expense via backend
   const handleExpenseSubmit = async (e) => {
@@ -169,7 +296,7 @@ export default function App() {
     }
     if (!formData.password) {
       tempErrors.password = "Password is required";
-    Komisji} else if (formData.password.length < 6) {
+    } else if (formData.password.length < 6) {
       tempErrors.password = "Password must be at least 6 characters";
     }
 
@@ -297,6 +424,249 @@ export default function App() {
     setSnackbar({ ...snackbar, open: false });
   };
 
+  // Time filter tabs handler
+  const handleTabChange = (_e, newValue) => {
+    setActiveTab(newValue);
+    const mapping = ['all', 'daily', 'weekly', 'monthly'];
+    setTimeFilter(mapping[newValue] || 'all');
+  };
+
+  // Income management functions
+  const handleIncomeChange = (e) => {
+    setIncomeForm({ ...incomeForm, [e.target.name]: e.target.value });
+  };
+
+  const handleIncomeSubmit = async (e) => {
+    e.preventDefault();
+    setIncomeError("");
+    if (!incomeForm.amount || !incomeForm.description) {
+      setIncomeError("Amount and description are required");
+      return;
+    }
+    
+    if (!isPremiumUser) {
+      setIncomeError("Income tracking is only available for premium users");
+      return;
+    }
+    
+    try {
+      // Create income entry - only send income data
+      const res = await api.post("/expenses", {
+        income_amount: parseFloat(incomeForm.amount),
+        income_description: incomeForm.description,
+        income_source: incomeForm.source || "Unknown"
+      });
+      
+      setExpenses([res.data, ...expenses]);
+      setIncomeForm({ amount: '', description: '', source: '' });
+      setSnackbar({ open: true, message: 'Income added successfully!', severity: 'success' });
+      
+      // Refresh expenses to get updated data
+      api.get("/expenses")
+        .then(res => setExpenses(res.data))
+        .catch(() => setExpenses([]));
+    } catch (err) {
+      setIncomeError(err.response?.data?.message || err.message);
+    }
+  };
+
+  const handleDeleteIncome = async (incomeId) => {
+    try {
+      await expenseAPI.deleteExpense(incomeId);
+      setExpenses(expenses.filter(exp => exp.id !== incomeId));
+      setSnackbar({ open: true, message: 'Income deleted successfully', severity: 'success' });
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.message || err.message, severity: 'error' });
+    }
+  };
+
+  // Download functionality
+  const handleDownload = () => {
+    if (!isPremiumUser) {
+      setSnackbar({ open: true, message: 'Download feature is only available for premium users', severity: 'warning' });
+      return;
+    }
+
+    const data = {
+      expenses: filteredExpenses.map(exp => ({
+        amount: exp.amount,
+        description: exp.description,
+        category: exp.Category?.name || 'Unknown',
+        date: new Date(exp.created_at).toLocaleDateString('en-IN'),
+        time: new Date(exp.created_at).toLocaleTimeString('en-IN')
+      })),
+      incomes: filteredIncomes.map(inc => ({
+        amount: inc.amount,
+        description: inc.description,
+        source: inc.source,
+        date: new Date(inc.created_at).toLocaleDateString('en-IN'),
+        time: new Date(inc.created_at).toLocaleTimeString('en-IN')
+      })),
+      summary: {
+        totalExpenses: filteredExpenses.reduce((sum, exp) => sum + parseFloat(exp.amount), 0),
+        totalIncomes: filteredIncomes.reduce((sum, inc) => sum + parseFloat(inc.amount), 0),
+        netAmount: filteredIncomes.reduce((sum, inc) => sum + parseFloat(inc.amount), 0) - 
+                  filteredExpenses.reduce((sum, exp) => sum + parseFloat(exp.amount), 0),
+        period: timeFilter === 'all' ? 'All Time' : 
+                timeFilter === 'daily' ? 'Today' :
+                timeFilter === 'weekly' ? 'Last 7 Days' : 'Last 30 Days'
+      }
+    };
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `expense-tracker-${timeFilter}-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    setSnackbar({ open: true, message: 'Data downloaded successfully!', severity: 'success' });
+  };
+
+  // Calculate totals
+  const totalExpenses = filteredExpenses.reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
+  const totalIncomes = filteredIncomes.reduce((sum, inc) => sum + parseFloat(inc.amount), 0);
+  const netAmount = totalIncomes - totalExpenses;
+
+  // Pagination logic
+  const totalExpensePages = Math.ceil(filteredExpenses.length / itemsPerPage);
+  const totalIncomePages = Math.ceil(filteredIncomes.length / itemsPerPage);
+  
+  const startExpenseIndex = (currentExpensePage - 1) * itemsPerPage;
+  const endExpenseIndex = startExpenseIndex + itemsPerPage;
+  const paginatedExpenses = filteredExpenses.slice(startExpenseIndex, endExpenseIndex);
+  
+  const startIncomeIndex = (currentIncomePage - 1) * itemsPerPage;
+  const endIncomeIndex = startIncomeIndex + itemsPerPage;
+  const paginatedIncomes = filteredIncomes.slice(startIncomeIndex, endIncomeIndex);
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentExpensePage(1);
+    setCurrentIncomePage(1);
+  }, [timeFilter]);
+
+  // Pagination handlers
+  const handleExpensePageChange = (page) => {
+    setCurrentExpensePage(page);
+  };
+
+  const handleIncomePageChange = (page) => {
+    setCurrentIncomePage(page);
+  };
+
+  // Pagination Component
+  const PaginationComponent = ({ currentPage, totalPages, onPageChange, type, itemsPerPage }) => {
+    if (totalPages <= 1) return null;
+
+    const getPageNumbers = () => {
+      const pages = [];
+      const maxVisiblePages = 5;
+      
+      if (totalPages <= maxVisiblePages) {
+        for (let i = 1; i <= totalPages; i++) {
+          pages.push(i);
+        }
+      } else {
+        if (currentPage <= 3) {
+          for (let i = 1; i <= 4; i++) pages.push(i);
+          pages.push('...');
+          pages.push(totalPages);
+        } else if (currentPage >= totalPages - 2) {
+          pages.push(1);
+          pages.push('...');
+          for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
+        } else {
+          pages.push(1);
+          pages.push('...');
+          for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
+          pages.push('...');
+          pages.push(totalPages);
+        }
+      }
+      return pages;
+    };
+
+    return (
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        gap: 1, 
+        mt: 2,
+        flexWrap: 'wrap'
+      }}>
+        <Button
+          size="small"
+          variant="outlined"
+          disabled={currentPage === 1}
+          onClick={() => onPageChange(currentPage - 1)}
+          sx={{
+            borderRadius: '8px',
+            color: '#4cafef',
+            borderColor: '#4cafef',
+            '&:disabled': {
+              color: 'rgba(255,255,255,0.3)',
+              borderColor: 'rgba(255,255,255,0.3)'
+            }
+          }}
+        >
+          Previous
+        </Button>
+        
+        {getPageNumbers().map((page, index) => (
+          <Button
+            key={index}
+            size="small"
+            variant={page === currentPage ? "contained" : "outlined"}
+            onClick={() => typeof page === 'number' && onPageChange(page)}
+            disabled={page === '...'}
+            sx={{
+              minWidth: '32px',
+              height: '32px',
+              borderRadius: '8px',
+              color: page === currentPage ? '#fff' : '#4cafef',
+              borderColor: '#4cafef',
+              backgroundColor: page === currentPage ? '#4cafef' : 'transparent',
+              '&:disabled': {
+                color: 'rgba(255,255,255,0.5)',
+                borderColor: 'transparent',
+                backgroundColor: 'transparent'
+              }
+            }}
+          >
+            {page}
+          </Button>
+        ))}
+        
+        <Button
+          size="small"
+          variant="outlined"
+          disabled={currentPage === totalPages}
+          onClick={() => onPageChange(currentPage + 1)}
+          sx={{
+            borderRadius: '8px',
+            color: '#4cafef',
+            borderColor: '#4cafef',
+            '&:disabled': {
+              color: 'rgba(255,255,255,0.3)',
+              borderColor: 'rgba(255,255,255,0.3)'
+            }
+          }}
+        >
+          Next
+        </Button>
+        
+        <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
+          Page {currentPage} of {totalPages} • {itemsPerPage} per page
+        </Typography>
+      </Box>
+    );
+  };
+
   return (
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
@@ -332,6 +702,17 @@ export default function App() {
                     <Typography variant="h4" sx={{ fontWeight: "bold", color: "#4cafef" }}>
                       Welcome, {welcome}!
                     </Typography>
+                    <Chip 
+                      label={`${screenSize.toUpperCase()} • ${itemsPerPage} per page`}
+                      size="small"
+                      sx={{
+                        background: 'rgba(76, 175, 239, 0.1)',
+                        color: '#4cafef',
+                        border: '1px solid rgba(76, 175, 239, 0.3)',
+                        fontWeight: 'bold',
+                        fontSize: '0.7rem'
+                      }}
+                    />
                     {isPremiumUser && (
                       <Box
                         sx={{
@@ -471,6 +852,54 @@ export default function App() {
                 </Box>
                 
                 <Divider sx={{ mb: 3 }} />
+
+                {/* Top Summary + Time Filters + Download */}
+                <Box sx={{ mb: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                    <Tabs
+                      value={activeTab}
+                      onChange={handleTabChange}
+                      textColor="primary"
+                      indicatorColor="primary"
+                      sx={{ minHeight: 32, '& .MuiTab-root': { minHeight: 32 } }}
+                    >
+                      <Tab icon={<FilterListIcon fontSize="small" />} iconPosition="start" label="All" />
+                      <Tab icon={<CalendarTodayIcon fontSize="small" />} iconPosition="start" label="Daily" />
+                      <Tab icon={<CalendarTodayIcon fontSize="small" />} iconPosition="start" label="Weekly" />
+                      <Tab icon={<CalendarTodayIcon fontSize="small" />} iconPosition="start" label="Monthly" />
+                    </Tabs>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      startIcon={<DownloadIcon />}
+                      onClick={handleDownload}
+                      disabled={!isPremiumUser}
+                      sx={{
+                        borderRadius: '8px',
+                        fontWeight: 'bold',
+                        background: isPremiumUser ? 'linear-gradient(135deg, #4cafef, #1976d2)' : 'rgba(255,255,255,0.08)'
+                      }}
+                    >
+                      Download
+                    </Button>
+                  </Box>
+
+                  {/* Summary cards */}
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 2 }}>
+                    <Card sx={{ p: 2, background: 'rgba(76, 175, 239, 0.08)', border: '1px solid rgba(76,175,239,0.2)' }}>
+                      <Typography variant="body2" color="text.secondary">Total Income</Typography>
+                      <Typography variant="h5" color="#4cafef" fontWeight="bold">₹{totalIncomes.toFixed(2)}</Typography>
+                    </Card>
+                    <Card sx={{ p: 2, background: 'rgba(255, 99, 132, 0.08)', border: '1px solid rgba(255,99,132,0.2)' }}>
+                      <Typography variant="body2" color="text.secondary">Total Expense</Typography>
+                      <Typography variant="h5" color="#ff8a80" fontWeight="bold">₹{totalExpenses.toFixed(2)}</Typography>
+                    </Card>
+                    <Card sx={{ p: 2, background: 'rgba(76, 175, 80, 0.08)', border: '1px solid rgba(76,175,80,0.2)' }}>
+                      <Typography variant="body2" color="text.secondary">Net</Typography>
+                      <Typography variant="h5" color={netAmount >= 0 ? '#81c784' : '#ff8a80'} fontWeight="bold">₹{netAmount.toFixed(2)}</Typography>
+                    </Card>
+                  </Box>
+                </Box>
               
                 <Box sx={{ 
                   display: 'grid', 
@@ -569,6 +998,8 @@ export default function App() {
                       </Button>
                     </form>
                   </Card>
+
+                  {/* Expenses list */}
                   <Card sx={{ 
                     p: 3, 
                     background: "rgba(76, 175, 239, 0.05)", 
@@ -592,7 +1023,7 @@ export default function App() {
                             Total Expenses:
                           </Typography>
                           <Typography variant="h5" color="#4cafef" fontWeight="bold">
-                            ₹{expenses.reduce((sum, exp) => sum + parseFloat(exp.amount), 0).toFixed(2)}
+                            ₹{filteredExpenses.reduce((sum, exp) => sum + parseFloat(exp.amount), 0).toFixed(2)}
                           </Typography>
                         </Box>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -600,14 +1031,22 @@ export default function App() {
                             Total Count:
                           </Typography>
                           <Typography variant="h6" color="text.primary" fontWeight="bold">
-                            {expenses.length} expenses
+                            {filteredExpenses.length} expenses
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
+                          <Typography variant="body2" color="text.secondary" fontWeight="medium">
+                            Showing:
+                          </Typography>
+                          <Typography variant="body2" color="text.primary" fontWeight="bold">
+                            {paginatedExpenses.length} of {filteredExpenses.length} • {itemsPerPage} per page
                           </Typography>
                         </Box>
                       </CardContent>
                     </Card>
                     
                     <Box sx={{ 
-                      maxHeight: 400, 
+                      maxHeight: screenSize === 'small' ? 300 : screenSize === 'medium' ? 400 : screenSize === 'large' ? 500 : 600, 
                       overflowY: 'auto',
                       '&::-webkit-scrollbar': {
                         width: '6px',
@@ -621,7 +1060,7 @@ export default function App() {
                         borderRadius: '3px',
                       },
                     }}>
-                      {expenses.length === 0 ? (
+                      {paginatedExpenses.length === 0 ? (
                         <Box sx={{ 
                           textAlign: 'center', 
                           py: 4,
@@ -635,7 +1074,7 @@ export default function App() {
                           </Typography>
                         </Box>
                       ) : (
-                        expenses.map((exp, index) => (
+                        paginatedExpenses.map((exp) => (
                           <Card key={exp.id} sx={{ 
                             mb: 2, 
                             backgroundColor: 'rgba(255,255,255,0.05)',
@@ -676,8 +1115,204 @@ export default function App() {
                         ))
                       )}
                     </Box>
+                    
+                    {/* Pagination for Expenses */}
+                    <PaginationComponent
+                      currentPage={currentExpensePage}
+                      totalPages={totalExpensePages}
+                      onPageChange={handleExpensePageChange}
+                      type="expenses"
+                      itemsPerPage={itemsPerPage}
+                    />
                   </Card>
                 </Box>
+
+                {/* Second row: Income - Premium Only */}
+                {isPremiumUser && (
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1.2fr' }, gap: 4, alignItems: 'start', mt: 4 }}>
+                    <Card sx={{ 
+                      p: 3, 
+                      background: "rgba(76, 175, 239, 0.05)", 
+                      border: "1px solid rgba(76, 175, 239, 0.2)",
+                      borderRadius: "12px"
+                    }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+                        <Typography variant="h5" sx={{ color: "#4cafef", fontWeight: "bold" }}>
+                          Add Income
+                        </Typography>
+                        <Chip 
+                          label="PREMIUM" 
+                          size="small" 
+                          sx={{ 
+                            background: 'linear-gradient(45deg, #FFD700, #FFA500)',
+                            color: '#000',
+                            fontWeight: 'bold',
+                            fontSize: '0.7rem'
+                          }} 
+                        />
+                      </Box>
+                    <form onSubmit={handleIncomeSubmit}>
+                      <TextField
+                        label="Amount *"
+                        name="amount"
+                        type="number"
+                        fullWidth
+                        margin="normal"
+                        value={incomeForm.amount}
+                        onChange={handleIncomeChange}
+                        required
+                      />
+                      <TextField
+                        label="Description *"
+                        name="description"
+                        fullWidth
+                        margin="normal"
+                        value={incomeForm.description}
+                        onChange={handleIncomeChange}
+                        required
+                      />
+                      <TextField
+                        label="Source (Optional)"
+                        name="source"
+                        fullWidth
+                        margin="normal"
+                        value={incomeForm.source}
+                        onChange={handleIncomeChange}
+                        placeholder="e.g., Salary, Freelance, Investment"
+                      />
+                      {incomeError && (
+                        <Typography color="error" align="center" sx={{ mt: 2, p: 1, backgroundColor: 'rgba(244, 67, 54, 0.1)', borderRadius: '4px' }}>
+                          {incomeError}
+                        </Typography>
+                      )}
+                      <Button
+                        type="submit"
+                        variant="contained"
+                        fullWidth
+                        sx={{
+                          mt: 3,
+                          borderRadius: "10px",
+                          fontWeight: "bold",
+                          py: 1.5,
+                          fontSize: "1.1rem",
+                          background: "linear-gradient(135deg, #4cafef, #1976d2)",
+                        }}
+                      >
+                        ADD INCOME
+                      </Button>
+                    </form>
+                  </Card>
+
+                    <Card sx={{ 
+                      p: 3, 
+                      background: "rgba(76, 175, 239, 0.05)", 
+                      border: "1px solid rgba(76, 175, 239, 0.2)",
+                      borderRadius: "12px",
+                      height: 'fit-content'
+                    }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+                        <Typography variant="h5" sx={{ color: "#4cafef", fontWeight: "bold" }}>
+                          Your Incomes
+                        </Typography>
+                        <Chip 
+                          label="PREMIUM" 
+                          size="small" 
+                          sx={{ 
+                            background: 'linear-gradient(45deg, #FFD700, #FFA500)',
+                            color: '#000',
+                            fontWeight: 'bold',
+                            fontSize: '0.7rem'
+                          }} 
+                        />
+                      </Box>
+
+                    <Card sx={{ 
+                      mb: 3, 
+                      backgroundColor: 'rgba(76, 175, 239, 0.1)', 
+                      border: '1px solid rgba(76, 175, 239, 0.3)',
+                      borderRadius: '8px'
+                    }}>
+                      <CardContent sx={{ py: 2 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                          <Typography variant="body1" color="text.secondary" fontWeight="medium">
+                            Total Incomes:
+                          </Typography>
+                          <Typography variant="h5" color="#4cafef" fontWeight="bold">
+                            ₹{filteredIncomes.reduce((sum, inc) => sum + parseFloat(inc.amount), 0).toFixed(2)}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Typography variant="body1" color="text.secondary" fontWeight="medium">
+                            Total Count:
+                          </Typography>
+                          <Typography variant="h6" color="text.primary" fontWeight="bold">
+                            {filteredIncomes.length} incomes
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
+                          <Typography variant="body2" color="text.secondary" fontWeight="medium">
+                            Showing:
+                          </Typography>
+                          <Typography variant="body2" color="text.primary" fontWeight="bold">
+                            {paginatedIncomes.length} of {filteredIncomes.length} • {itemsPerPage} per page
+                          </Typography>
+                        </Box>
+                      </CardContent>
+                    </Card>
+
+                    <Box sx={{ 
+                      maxHeight: screenSize === 'small' ? 300 : screenSize === 'medium' ? 400 : screenSize === 'large' ? 500 : 600, 
+                      overflowY: 'auto'
+                    }}>
+                      {paginatedIncomes.length === 0 ? (
+                        <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
+                          <Typography variant="h6" sx={{ mb: 1 }}>
+                            No incomes yet
+                          </Typography>
+                          <Typography variant="body2">
+                            Add your first income to get started!
+                          </Typography>
+                        </Box>
+                      ) : (
+                        paginatedIncomes.map((inc) => (
+                          <Card key={inc.id} sx={{ mb: 2, backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                            <CardContent sx={{ py: 2, '&:last-child': { pb: 2 } }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                <Box sx={{ flex: 1 }}>
+                                  <Typography variant="h6" color="#81c784" fontWeight="bold" sx={{ mb: 0.5 }}>
+                                    ₹{inc.amount} - {inc.source}
+                                  </Typography>
+                                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                                    {inc.description}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {new Date(inc.created_at).toLocaleDateString('en-IN')} at {new Date(inc.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                                  </Typography>
+                                </Box>
+                                <IconButton
+                                  onClick={() => handleDeleteIncome(inc.id)}
+                                  sx={{ color: '#ff6b6b' }}
+                                >
+                                  <DeleteIcon />
+                                </IconButton>
+                              </Box>
+                            </CardContent>
+                          </Card>
+                        ))
+                      )}
+                    </Box>
+                    
+                    {/* Pagination for Incomes */}
+                    <PaginationComponent
+                      currentPage={currentIncomePage}
+                      totalPages={totalIncomePages}
+                      onPageChange={handleIncomePageChange}
+                      type="incomes"
+                      itemsPerPage={itemsPerPage}
+                    />
+                    </Card>
+                  </Box>
+                )}
               </CardContent>
             </Card>
           </Box>

@@ -5,23 +5,62 @@ const { sequelize } = require('../config/db');
 const { Transaction } = require('sequelize');
 exports.addExpense = async (req, res) => {
   try {
-    const { amount, description, category_id } = req.body;
+    const { amount, description, category_id, income_amount, income_description, income_source } = req.body;
     const user_id = req.user.userId; // Get user ID from JWT token
+    const isPremium = req.user?.ispremimumuser === true;
     const t = await sequelize.transaction();  
     
-    if (!amount || !description || !category_id) {
-      return res.status(400).json({ message: 'Amount, description, and category are required' });
+    // Check if this is an income entry (has income_amount)
+    if (income_amount && income_amount > 0) {
+      // Income entry - only check for income fields
+      if (!income_amount || !income_description) {
+        return res.status(400).json({ message: 'Income amount and description are required' });
+      }
+      
+      // Check if user is premium for income tracking
+      if (!isPremium) {
+        return res.status(403).json({ message: 'Income tracking is only available for premium users' });
+      }
+      
+      // Create income entry with dummy expense data
+      const expense = await Expense.create({ 
+        user_id, 
+        amount: 0, // Dummy expense amount
+        description: "Income Entry", // Dummy description
+        category_id: 1, // Default category ID
+        income_amount: parseFloat(income_amount),
+        income_description: income_description,
+        income_source: income_source || "Unknown"
+      },{transaction:t});
+      
+      await t.commit();
+      res.status(201).json(expense);
+    } else {
+      // Regular expense entry
+      if (!amount || !description || !category_id) {
+        return res.status(400).json({ message: 'Amount, description, and category are required' });
+      }
+      
+      // Safely update cumulative total in Signup
+      const fetchuser = await Signup.findByPk(user_id);
+      const previousTotal = parseFloat(fetchuser?.totalexpene || 0);
+      const amountNumber = parseFloat(amount);
+      const newTotal = previousTotal + (isNaN(amountNumber) ? 0 : amountNumber);
+      await Signup.update({ totalexpene: newTotal }, { where: { id: user_id} },{transaction:t});
+      
+      const expense = await Expense.create({ 
+        user_id, 
+        amount, 
+        description, 
+        category_id,
+        income_amount: 0,
+        income_description: null,
+        income_source: null
+      },{transaction:t});
+      
+      await t.commit();
+      res.status(201).json(expense);
     }
-    // Safely update cumulative total in Signup
-    const fetchuser = await Signup.findByPk(user_id);
-    const previousTotal = parseFloat(fetchuser?.totalexpene || 0);
-    const amountNumber = parseFloat(amount);
-    const newTotal = previousTotal + (isNaN(amountNumber) ? 0 : amountNumber);
-    await Signup.update({ totalexpene: newTotal }, { where: { id: user_id} },{transaction:t});
-    
-    const expense = await Expense.create({ user_id, amount, description, category_id },{transaction:t});
-    await t.commit();
-    res.status(201).json(expense);
   } catch (error) {
     await t.rollback();
     console.error('Error adding expense:', error);
@@ -32,6 +71,7 @@ exports.addExpense = async (req, res) => {
 exports.getExpensesByUser = async (req, res) => {
   try {
     const user_id = req.user.userId; // Get user ID from JWT token
+    const isPremium = req.user?.ispremimumuser === true;
     
     const expenses = await Expense.findAll({
       where: { user_id, deleted_at: null },
@@ -43,8 +83,20 @@ exports.getExpensesByUser = async (req, res) => {
       order: [['created_at', 'DESC']]
     });
 
-    console.log('Fetched expenses for user:', user_id, 'Count:', expenses.length);
-    res.json(expenses);
+    // Filter out income data for non-premium users
+    const filteredExpenses = expenses.map(expense => {
+      const expenseData = expense.toJSON();
+      if (!isPremium) {
+        // Remove income fields for non-premium users
+        delete expenseData.income_amount;
+        delete expenseData.income_description;
+        delete expenseData.income_source;
+      }
+      return expenseData;
+    });
+
+    console.log('Fetched expenses for user:', user_id, 'Count:', expenses.length, 'Premium:', isPremium);
+    res.json(filteredExpenses);
   } catch (err) {
     console.error('Error fetching expenses:', err);
     res.status(500).json({ message: 'Error fetching expenses', error: err.message });
