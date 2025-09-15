@@ -2,12 +2,13 @@ const { Cashfree, CFEnvironment } = require("cashfree-pg");
 
 class PaymentService {
     constructor() {
-        // Cashfree configuration - आप इन्हें environment variables में store कर सकते हैं
-        this.cashfree = new Cashfree(
-            CFEnvironment.SANDBOX, 
-            "TEST430329ae80e0f32e41a393d78b923034", 
-            "TESTaf195616268bd6202eeb3bf8dc458956e7192a85"
-        );
+        const cashfreeEnv = (process.env.CASHFREE_ENV || 'SANDBOX').toUpperCase();
+        const clientId = process.env.CASHFREE_CLIENT_ID;
+        const clientSecret = process.env.CASHFREE_CLIENT_SECRET;
+
+        const environment = cashfreeEnv === 'PRODUCTION' ? CFEnvironment.PRODUCTION : CFEnvironment.SANDBOX;
+
+        this.cashfree = new Cashfree(environment, clientId, clientSecret);
     }
 
     // Order create करने के लिए method

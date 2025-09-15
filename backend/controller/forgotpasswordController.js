@@ -6,10 +6,10 @@ const ForgotPassword = require('../model/ForgotPassword'); // <- new model banan
 
 // Mail transporter
 let transporter = nodemailer.createTransport({
-    service: "gmail",
+    service: process.env.EMAIL_SERVICE || "gmail",
     auth: {
-        user: "shivam.itechsarathi@gmail.com",
-        pass: "gapa pwxc slvm zlaa"
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
     }
 });
 
@@ -33,11 +33,12 @@ const forgotpasswordController = {
             });
 
             // reset link
-            const resetUrl = `http://localhost:5173/password/resetpassword/${requestId}`;
+            const frontendBaseUrl = process.env.FRONTEND_BASE_URL || 'http://localhost:5173';
+            const resetUrl = `${frontendBaseUrl}/password/resetpassword/${requestId}`;
 
             // send mail
             await transporter.sendMail({
-                from: "shivam.itechsarathi@gmail.com",
+                from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
                 to: user.email,
                 subject: "Password Reset Link",
                 text: `Click this link to reset your password: ${resetUrl}`
